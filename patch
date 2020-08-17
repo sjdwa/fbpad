@@ -1,0 +1,36 @@
+--- fbpad2.c	2020-08-14 09:42:03.045227357 +0530
++++ fbpad.c	2020-08-14 09:42:46.051230881 +0530
+@@ -26,6 +26,7 @@
+ #include <sys/wait.h>
+ #include <termios.h>
+ #include <unistd.h>
++#include <dirent.h>
+ #include <linux/vt.h>
+ #include "conf.h"
+ #include "fbpad.h"
+@@ -148,6 +149,15 @@
+ 	}
+ }
+ 
++static void command(char *a)
++{
++	if(fork() == 0)
++	{
++		setsid();
++		execlp("/bin/sh", "sh", "-c", a, NULL);
++	}
++}
++
+ static void directkey(void)
+ {
+ 	char *shell[32] = SHELL;
+@@ -177,6 +187,9 @@
+ 		case 'e':
+ 			execterm(editor);
+ 			return;
++		case CTRLKEY('p'):
++			command("fbgrab -w 1376 -h 758 -b 32 -f /dev/fb0 /mnt/ext/Media/Pix/screenshots/screenshot.png 2>/dev/null");
++			return;
+ 		case 'j':
+ 		case 'k':
+ 			showterm(altterm(cterm()));

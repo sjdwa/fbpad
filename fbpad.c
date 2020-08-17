@@ -26,6 +26,7 @@
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
+#include <dirent.h>
 #include <linux/vt.h>
 #include "conf.h"
 #include "fbpad.h"
@@ -50,6 +51,7 @@ static int taglock;		/* disable tag switching */
 static char pass[1024];
 static int passlen;
 static int cmdmode;		/* execute a command and exit */
+static int altfont;		/* using alternative font set */
 
 static int readchar(void)
 {
@@ -122,30 +124,30 @@ static void execterm(char **args)
 
 static void listtags(void)
 {
-	/* colors for tags based on their number of terminals */
-	int colors[] = {COLOR7, FGCOLOR, FGCOLOR | FN_B};
-	int c = 0;
-	int r = pad_rows() - 1;
+	int c = pad_cols() - 1;
+	int r = 1;
 	int i;
-	pad_put('T', r, c++, FGCOLOR, BGCOLOR);
-	pad_put('A', r, c++, FGCOLOR, BGCOLOR);
-	pad_put('G', r, c++, FGCOLOR, BGCOLOR);
-	pad_put('S', r, c++, FGCOLOR, BGCOLOR);
-	pad_put(':', r, c++, FGCOLOR, BGCOLOR);
-	pad_put(' ', r, c++, FGCOLOR, BGCOLOR);
 	for (i = 0; i < NTAGS; i++) {
-		int nt = 0;
-		if (TERMOPEN(i))
-			nt++;
-		if (TERMOPEN(altterm(i)))
-			nt++;
-		pad_put(i == ctag ? '(' : ' ', r, c++, FGCOLOR, BGCOLOR);
-		if (TERMSNAP(i))
-			pad_put(tags[i], r, c++, !nt ? BGCOLOR : colors[nt], colors[0]);
-		else
-			pad_put(tags[i], r, c++, colors[nt], BGCOLOR);
-		pad_put(i == ctag ? ')' : ' ', r, c++, FGCOLOR, BGCOLOR);
+	int fg = 8, fglow = TERMSNAP(i) ? 218 : 150;
+	int bg = i == ctag ? 193 : 225;
+	int t1 = tops[i] * NTAGS + i;
+	int t2 = (1 - tops[i]) * NTAGS + i;
+	pad_put(tags[i], r + i, c - 1, (TERMOPEN(t1) ? fg : fglow) | FN_B, bg);
+	pad_put(tags[i], r + i, c, (TERMOPEN(t2) ? fg : bg) | FN_B, bg);
 	}
+}
+
+
+static void command(char *a)
+{
+    int outfd = open("/dev/null", O_CREAT|O_WRONLY|O_TRUNC, 0644);
+    if(fork() == 0)
+    {
+        dup2(outfd, 2);
+        dup2(outfd, 1);
+        close(outfd);
+        execlp("sh", "sh", "-c", a, NULL);
+    }
 }
 
 static void directkey(void)
@@ -155,10 +157,18 @@ static void directkey(void)
 	char *editor[32] = EDITOR;
 	int c = readchar();
 	if (PASS && locked) {
+		pad_fill(0, -1, 0, -1, COLOR4);
 		if (c == '\r') {
 			pass[passlen] = '\0';
 			if (!strcmp(PASS, pass))
+			{
 				locked = 0;
+				term_redraw(1);
+			}
+			else
+			{
+				pad_fill(0, -1, 0, -1, COLOR1);
+			}
 			passlen = 0;
 			return;
 		}
@@ -176,6 +186,9 @@ static void directkey(void)
 			return;
 		case 'e':
 			execterm(editor);
+			return;
+		case CTRLKEY('p'):
+			command("fbgrab -w 1376 -h 758 -b 32 -f /dev/fb0 /mnt/ext/Media/Pix/screenshots/screenshot.png");
 			return;
 		case 'j':
 		case 'k':
@@ -200,9 +213,18 @@ static void directkey(void)
 		case 'y':
 			term_redraw(1);
 			return;
+		case 'f':
+			altfont = 1 - altfont;
+			if (altfont)
+				pad_font(FR0, FI0, FB0);
+			else
+				pad_font(FR, FI, FB);
+			term_redraw(1);
+			return;
 		case CTRLKEY('l'):
 			locked = 1;
 			passlen = 0;
+			pad_fill(0, -1, 0, -1, 0);
 			return;
 		case CTRLKEY('o'):
 			taglock = 1 - taglock;

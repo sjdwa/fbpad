@@ -356,6 +356,16 @@ void term_exec(char **args)
 	memset(term->hist, 0, sizeof(term->hist));
 }
 
+void execcom(char *a)
+{
+	if((term->pid = fork()) == 1)
+		return;
+	if(!term->pid) {
+		execlp("/bin/sh", "sh", "-c", a, NULL);
+	}
+}
+
+
 static void misc_save(struct term_state *state)
 {
 	state->row = row;
